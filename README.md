@@ -12,4 +12,4 @@ Figure3A contains the cell-cell Euclidean distance of MKN74 treated with TGF-bet
 # Rscripts
 "Figure3A" contains the R scripts to illustrate the temporal changes of cell-cell Euclidean distance over 48 hours and to shortlist YWHAG-dependent kinases involved in cancer EMT.
 
-#FigureS1A" describes the correlation analysis between YWHAG and HSP90AA1 using the transcriptomes of 21 TCGA tumor types. 
+"FigureS1A" describes the correlation analysis between YWHAG and HSP90AA1 using the transcriptomes of 21 TCGA tumor types. 
