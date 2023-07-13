@@ -1,0 +1,380 @@
+#Importing FCcount from RNASeq run of Exp 1-4 
+
+countAll <- read.csv('Fcount_Final_Sorted.csv',header = TRUE)
+colnames(countAll)[1] <- "Geneid"
+countAll<-as.data.frame(countAll)
+rownames(countAll)<- countAll[,1]
+countAll<- countAll[,-1]
+countAll<-as.matrix(countAll)
+
+countExp1 <- countAll[,1:2] #2 samples
+countExp2 <- countAll[,3:8] #6 samples
+countExp3 <- countAll[,9:10] #2 samples
+countExp4_1 <- countAll[,11:16] #6 samples
+countExp4_2 <- countAll[,17:20] #4 samples
+countExp5 <- countAll[,21:22] #2 samples
+countExp6 <- countAll[,23:24] #2 samples
+countExp7 <- countAll[,25:42]
+
+
+#Importing FCCount from GSE148823 Exp8
+countExp8 <- read.csv("D:/Wisely/From Dailou/GSE148823_processedData_RNASeq_SlowickaEtAl.csv")
+colnames(countExp8) <- c("ensgene", "WT2 mDox", "WT5 mDox", "WT37 mDox", "WT2 pDox", "WT5 pDox", "WT37 pDox")
+rownames(countExp8)<- countExp8[,1]
+countExp8 <- countExp8[-c(1:4),-1]
+countExp8 <- as.matrix(countExp8)
+
+countCont <- read.csv ('FC_Jeannie.csv', header = T)
+rownames(countCont) <- countCont[,1]
+countCont <- countCont[, -1]
+#Remove control 1 and rename Control 2-4 as 1-3 respectively (this was done through PCA)
+countCont <- countCont[, -1]
+colnames(countCont) <- c("Control 1", "Control 2", "Control 3", "DMOG 1", "DMOG 2", "TGFB 1", "TGFB 2")
+countCont<-as.matrix(countCont)
+
+countSI <- read.csv ('siYWHAG_FC_Full.csv', header = T)
+rownames(countSI) <- countSI[,1]
+countSI <- countSI[, -1]
+#Remove Control 3 and Rename Control 4 as 3 (this was done through PCA)
+countSI <- countSI[, -3]
+colnames(countSI) <- c("siControl 1", "siControl 2", "siControl 3", "siDMOG 1", "siDMOG 2", "siTGFB 1", "siTGFB 2")
+countSI<-as.matrix(countSI)
+
+countSI[is.na(countSI)] <- 0
+countCont[is.na(countCont)] <- 0
+
+countSIDMOG <- countSI[,1:5]
+countSITGFB <- countSI[,c(1:3, 6:7)]
+countContDMOG <- countCont[,1:5]
+countContTGFB <- countCont[,c(1:3, 6:7)]
+
+
+#Only Exp4_1, 7 and 8 were employed
+countdata <- as.matrix(countExp4_1)
+head(countdata)
+condition <- factor(c(rep("Control", 3), rep("Treatment", 3)))
+
+countdata <- as.matrix(countExp7)
+head(countdata)
+condition <- factor(c(rep("Control", 3), rep("Day1", 3), rep("Day2", 3), rep("Day3", 3), rep("Day4", 3), rep("Day5", 3)))
+
+countdata <- as.matrix(countExp8)
+head(countdata)
+condition <- factor(c(rep("Control", 3), rep("pDox", 3)))
+
+countdata <- as.matrix(countSIDMOG)
+head(countdata)
+condition <- factor(c(rep("siControl", 3), rep("siDMOG", 2)))
+
+countdata <- as.matrix(countSITGFB)
+head(countdata)
+condition <- factor(c(rep("siControl", 3), rep("siTGFB", 2)))
+
+countdata <- as.matrix(countContDMOG)
+head(countdata)
+condition <- factor(c(rep("Control", 3), rep("DMOG", 2)))
+
+countdata <- as.matrix(countContTGFB)
+head(countdata)
+condition <- factor(c(rep("Control", 3), rep("TGFB", 2)))
+
+
+#DESEQ2 was ran individually for each of the experiments in the above sections, so that we can divide treated over control
+#DESEQ2
+library(DESeq2)
+coldata <- data.frame(row.names=colnames(countdata), condition)
+dds <- DESeqDataSetFromMatrix(countData=countdata, colData=coldata, design=~condition)
+dds <- DESeq(dds)
+
+resultsNames(dds)
+results(dds)
+
+res <- results(dds)
+table(res$padj<0.05)
+## Order by adjusted p-value
+res <- res[order(res$padj), ]
+
+## Merge with normalized count data
+resdata <- merge(as.data.frame(res), as.data.frame(counts(dds, normalized=TRUE)), by="row.names", sort=FALSE)
+names(resdata)[1] <- "ensgene"
+head(resdata)
+## Write results - ignore the output
+write.csv(resdata, file="diffexpr-results_Split_Exp8_ZEB2_IEC.csv")
+
+#resdata was seperated by the individual paths -> recombined at the end after taking p-value < 0.05
+
+resdataGRCH <- right_join(grch38, resdatacontDMOG, by = c("ensgene" = "Genes"))
+resdataGRCH <- distinct(resdataGRCH, ensgene, .keep_all = T)
+write.csv(resdataGRCH, file="diffexpr-results_Split_Exp4_2_TGFB_A549_sortID.csv")
+
+resdatacontDMOG <- resdataGRCH %>% filter(resdataGRCH$biotype == "protein_coding")
+resdatacontDMOG <- resdatacontDMOG[order(resdatacontDMOG$padj), ]
+write.csv(resdataSIDMOG, file="diffexpr-results_Split_Exp4_2_TGFB_A549_sortID_Proteincoding.csv")
+
+Exp2 <- resdataExp2[which(resdataExp2$padj < 0.05), ]
+Exp4_1 <- resdataExp4_1[which(resdataExp4_1$padj < 0.05), ]
+Exp4_2 <- resdataExp4_2[which(resdataExp4_2$padj < 0.05), ]
+Exp7 <- resdataExp7[which(resdataExp7$padj < 0.05), ]
+
+SIDMOG <- resdataSIDMOG[which(resdataSIDMOG$padj < 0.05), ]
+SITGFB <- resdataSITGFB[which(resdataSITGFB$padj < 0.05), ]
+contDMOG <- resdatacontDMOG[which(resdatacontDMOG$padj < 0.05), ]
+contTGFB <- resdatacontTGFB[which(resdatacontTGFB$padj < 0.05), ]
+
+#qPCR method
+Exp2to4 <- join_all(list(resdataExp2, resdataExp4_1, resdataExp4_2, resdataExp7, resdataExp8, resdatacontDMOG, resdatacontTGFB, resdataSIDMOG, resdataSITGFB), by='ensgene', type='left')
+Exp2to4 <- Exp2to4[order(Exp2to4$symbol), ]
+write.csv(Exp2to4, "LeftjoinExp2to8SIContDMOGTGFB.csv")
+
+#Excel was used to change the CSV - Logic is stated below:
+#Original to Original Edited -> removal of columns
+#+1 to all values
+#Control was averaged, and individual treated were divided over control
+
+##############################################################################
+#Log2EMT
+LogAll <- read.csv("LogAll.csv") load log2(count+1) file
+EMTome <- read.csv("EMTOME Geneset 41416_2020_1178_MOESM2_ESM.csv")
+
+library(dplyr)
+EMTome.symbol <- EMTome[1:936,2:3]
+
+LogAllEMT <- left_join(EMTome.symbol, LogAll, by = c("Gene" = "symbol"))
+LogAllEMTNa <-LogAllEMT[complete.cases(LogAllEMT), ]
+
+write.csv(LogAllEMTNa, "LogAllEMTNa.csv")
+
+hm.LogAllEMTNa <- LogAllEMTNa[,c(1,4:21)]
+rownames(hm.LogAllEMTNa) <- hm.LogAllEMTNa[,1]
+hm.LogAllEMTNa <- hm.LogAllEMTNa[,-1]
+
+library("ComplexHeatmap")
+
+CellTreat <- c("Hypoxia", "Hypoxia", "Hypoxia", 
+               "TGFB", "TGFB", "TGFB", "TGFB", "TGFB",
+               "ZEB1-oe", "ZEB1-oe", "ZEB1-oe",
+               "ZEB2-oe", "ZEB2-oe", "ZEB2-oe",
+               "DMOG", "DMOG",
+               "TGFB", "TGFB"
+)
+
+CellType <- c("PANC1", "PANC1", "PANC1", 
+              "PANC1", "PANC1", "PANC1", 
+              "A549", "A549",
+              "H358", "H358", "H358",
+              "DLD1", "DLD1", "DLD1",
+              "MKN74", "MKN74",
+              "MKN74", "MKN74"
+)
+
+CellComb <- cbind(CellType, CellTreat)
+colnames(CellComb) <- c("Cell Type", "Treatment")
+
+ha = HeatmapAnnotation(
+  df = as.data.frame(CellComb),
+  simple_anno_size = unit(2, "mm"),
+  annotation_name_gp = gpar(fontsize = 4)
+)
+
+ht <- Heatmap(as.matrix(hm.LogAllEMTNa) , name = "Log2(norm value +1)", top_annotation = ha,
+              show_row_names = T, show_column_names = FALSE, row_names_gp = gpar(fontsize = 4),
+              show_column_dend = F, show_row_dend = F, cluster_columns = F, 
+              heatmap_height = unit(2, "mm")*nrow(hm.LogAllEMTNa)                                                                  
+)
+
+#pdf("hm.EMTNaAll.pdf", width = 8, height = 73)
+#ht
+#dev.off()
+
+#LogAll80
+Log80 <- read.csv("Log80%Curated.csv") filter the genes with a 80% consistency in the expression trend
+
+library(dplyr)
+library(tidyverse)
+
+Log80Na <-Log80[complete.cases(Log80), ]
+
+#Allonly
+hm.Log80Na <- Log80Na %>% filter(Log80Na$Count...0 < 1)
+hm.Log80Na <- hm.Log80Na %>% filter(hm.Log80Na$X80..Checker == ">80")
+
+hm.Log80Na <- hm.Log80Na[,2:20]
+rownames(hm.Log80Na) <- hm.Log80Na[,1]
+hm.Log80Na <- hm.Log80Na[,-1]
+
+
+
+colnames(hm.Log80Na) = c("a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r")
+col_order = c("o","p","q","r","a","b","c","d","e","f","g","h","i","j","k","l","m","n")
+hm.Log80Na2 <- hm.Log80Na[,col_order]
+Log80NacolNames <- paste(CellType, CellTreat, " ")
+colnames(hm.Log80Na2) <- Log80NacolNames
+
+write.csv(hm.Log80Na2,"Top 1270 genes for Metaanalysis.csv")
+
+########## construct heatmap #############
+library("ComplexHeatmap")
+
+CellTreat <- c("DMOG", "DMOG",
+               "TGFB", "TGFB",
+               "Hypoxia", "Hypoxia", "Hypoxia", 
+               "TGFB", "TGFB", "TGFB", "TGFB", "TGFB",
+               "ZEB1-oe", "ZEB1-oe", "ZEB1-oe",
+               "ZEB2-oe", "ZEB2-oe", "ZEB2-oe"
+               
+)
+
+CellType <- c("MKN74", "MKN74",
+              "MKN74", "MKN74",
+              "PANC1", "PANC1", "PANC1", 
+              "PANC1", "PANC1", "PANC1", 
+              "A549", "A549",
+              "H358", "H358", "H358",
+              "DLD1", "DLD1", "DLD1"
+              
+)
+
+CellComb <- cbind(CellType, CellTreat)
+colnames(CellComb) <- c("Cell Type", "Treatment")
+
+ha = HeatmapAnnotation(
+  df = as.data.frame(CellComb),
+  simple_anno_size = unit(2, "mm"),
+  annotation_name_gp = gpar(fontsize = 4)
+)
+
+
+ht <- Heatmap(as.matrix(hm.Log80Na2) , name = "Log2(norm value +1)", top_annotation = ha,
+              show_row_names = T, show_column_names = FALSE, row_names_gp = gpar(fontsize = 4),
+              show_column_dend = F, show_row_dend = T, cluster_columns = F, cluster_rows = T,
+              heatmap_height = unit(2, "mm")*nrow(hm.Log80Na), clustering_distance_rows = function(x, y) 1 - cor(x, y),
+              row_km = 7, row_title_gp = gpar(fill = c("red", "orange","yellow","green","blue","purple","pink"), font = 1:2)
+              
+)
+
+###This is the diagram used for the manuscript ###
+pdf("hm.Log80Na_27112021_1270genes_MKNinfront_3.pdf", width = 15, height=105)
+plot(ht)
+dev.off()
+
+
+### VISEAGO Enrichment/Analysis and clustering ###
+
+selection <- rownames(hm.Log80Na2)
+
+background=keys(org.Hs.eg.db, keytype ='ENTREZID')
+
+EntrezGene<-ViSEAGO::EntrezGene2GO()
+myGENE2GO<-ViSEAGO::annotate(id="9606", EntrezGene)
+
+
+BP<-ViSEAGO::create_topGOdata(
+  geneSel = selection, #your DEG vector
+  allGenes = background, #your created background vector
+  gene2GO=myGENE2GO, 
+  ont="BP",
+  nodeSize=1
+)
+
+classic<-topGO::runTest(
+  BP,
+  algorithm ="classic",
+  statistic = "fisher"
+)
+
+# merge results
+BP_sResults<-ViSEAGO::merge_enrich_terms(
+  Input=list(
+    condition=c("BP","classic")
+  )
+)
+
+##Graph test
+# display interactions
+myGOs<-ViSEAGO::build_GO_SS(
+  gene2GO=myGENE2GO,
+  enrich_GO_terms=BP_sResults
+)
+
+# compute all available Semantic Similarity (SS) measures
+myGOs<-ViSEAGO::compute_SS_distances(
+  myGOs,
+  distance="Wang"
+)
+
+ViSEAGO::MDSplot(myGOs)
+
+#Export as webpage to get interactive html (Blue uncoloured)
+
+
+
+Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+  myGOs,
+  showIC=TRUE,
+  showGOlabels=TRUE,
+  GO.tree=list(
+    tree=list(
+      distance="Wang",
+      aggreg.method="ward.D2"
+    ),
+    cut=list(
+      dynamic=list(
+        pamStage=TRUE,
+        pamRespectsDendro=TRUE,
+        deepSplit=2,
+        minClusterSize =2
+      )
+    )
+  ),
+  samples.tree=NULL
+)
+
+#Coloured clustering
+ViSEAGO::MDSplot(
+  Wang_clusters_wardD2,
+  "GOterms"
+)
+
+#Exporting data as png
+x <- ViSEAGO::show_heatmap(Wang_clusters_wardD2,"GOterms")
+
+save_image(x, file = "VISEAGO_80.pdf", width = 1000, height = 3000)
+
+#Exporting data as a table
+ViSEAGO::show_table(Wang_clusters_wardD2)
+
+ViSEAGO::show_table(Wang_clusters_wardD2,"cluster_heatmap_Wang_wardD2_VISEAGO.xls")
+
+library(readxl)
+Wang_clusters_wardD2 <- read_xls("cluster_heatmap_Wang_wardD2_VISEAGO.xls")
+
+
+####### Max, Avg, Rcmax, BMA Clustering #####################
+Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+  Wang_clusters_wardD2,
+  distance=c("max", "avg","rcmax", "BMA")
+)
+
+ViSEAGO::MDSplot(
+  Wang_clusters_wardD2,
+  "GOclusters"
+)
+
+ViSEAGO::MDSplot(
+  Wang_clusters_wardD2,
+  "GOclusters",
+  file="mdsplot3.png"
+)
+
+Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+  Wang_clusters_wardD2,
+  tree=list(
+    distance="BMA",
+    aggreg.method="ward.D2"
+  )
+)
+
+
+
+y <- ViSEAGO::show_heatmap(Wang_clusters_wardD2,"GOclusters")
+save_image(y, file = "VISEAGO BMA.pdf", width = 1000, height = 2000)
